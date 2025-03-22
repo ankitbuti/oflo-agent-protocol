@@ -1,7 +1,7 @@
-from oflo_agent_protocol import BaseAgent, Message, FunctionDefinition
 from typing import Dict, Any, List
 import asyncio
 import logging
+from oflo_agent_protocol import BaseAgent, Message, FunctionDefinition
 
 class PingPongAgent(BaseAgent):
     """A simple ping-pong agent demonstrating the Oflo Agent Protocol."""
@@ -79,31 +79,5 @@ class PingPongAgent(BaseAgent):
         self.logger.info(f"Received: {message}, Responding: {response}")
         return response
 
-async def main():
-    """Run the ping-pong agent example."""
-    # Create and initialize the agent
-    agent = PingPongAgent()
-    await agent.initialize()
-    
-    try:
-        # Example conversation
-        messages = ["ping", "pong", "ping", "hello", "pong"]
-        for msg in messages:
-            print(f"\nUser: {msg}")
-            response = await agent.process_message(msg)
-            print(f"Agent: {response.content}")
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        print("\nStopping the agent...")
-    finally:
-        await agent.terminate()
-
-if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # Run the example
-    asyncio.run(main())
+# Export the agent class for use in the worker
+__all__ = ['PingPongAgent'] 

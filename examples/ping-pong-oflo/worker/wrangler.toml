@@ -1,0 +1,25 @@
+name = "ping-pong-agent"
+main = "src/worker.ts"
+compatibility_date = "2024-03-20"
+
+[build]
+command = "npm run build"
+
+[vars]
+ENVIRONMENT = "development"
+
+[[kv_namespaces]]
+binding = "AGENT_STATE"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+[triggers]
+crons = ["0 0 * * *"] # Run cleanup task daily at midnight
+
+[env.staging]
+name = "ping-pong-agent-staging"
+vars = { ENVIRONMENT = "staging" }
+
+[env.development]
+name = "ping-pong-agent-dev"
+vars = { ENVIRONMENT = "development" } 
