@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Marketing Oflo AI Agent</title>
+		<style>
+			* { margin: 0; padding: 0; box-sizing: border-box; }
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+				line-height: 1.6;
+				padding: 2rem;
+				max-width: 1200px;
+				margin: 0 auto;
+				background: #f9fafb;
+			}
+			.container { 
+				background: white;
+				padding: 2rem;
+				border-radius: 12px;
+				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+			}
+			.header {
+				margin-bottom: 2rem;
+				padding-bottom: 1rem;
+				border-bottom: 1px solid #e5e7eb;
+			}
+			.title {
+				font-size: 2rem;
+				color: #111827;
+				font-weight: 600;
+			}
+			.subtitle {
+				color: #6b7280;
+				margin-top: 0.5rem;
+			}
+			.section {
+				margin-bottom: 2rem;
+				padding: 1rem;
+				border: 1px solid #e5e7eb;
+				border-radius: 8px;
+			}
+			.section-title {
+				font-size: 1.25rem;
+				color: #374151;
+				margin-bottom: 1rem;
+			}
+			textarea {
+				width: 100%;
+				padding: 0.75rem;
+				border: 1px solid #d1d5db;
+				border-radius: 6px;
+				min-height: 120px;
+				margin-bottom: 1rem;
+				font-family: inherit;
+			}
+			button {
+				background: #2563eb;
+				color: white;
+				padding: 0.75rem 1.5rem;
+				border: none;
+				border-radius: 6px;
+				cursor: pointer;
+				font-weight: 500;
+				transition: background 0.2s;
+			}
+			button:hover {
+				background: #1d4ed8;
+			}
+			#agentInfo, #response {
+				background: #f3f4f6;
+				padding: 1rem;
+				border-radius: 6px;
+				white-space: pre-wrap;
+				margin-top: 1rem;
+			}
+			.error {
+				color: #dc2626;
+				margin-top: 0.5rem;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<header class="header">
+				<h1 class="title">Marketing AI Agent</h1>
+				<p class="subtitle">Your AI-powered marketing assistant</p>
+			</header>
+
+			<section class="section">
+				<h2 class="section-title">Agent Information</h2>
+				<button id="getInfo">View Agent Capabilities</button>
+				<div id="agentInfo"></div>
+			</section>
+
+			<section class="section">
+				<h2 class="section-title">Send Message</h2>
+				<textarea id="messageInput" placeholder="Enter your marketing request here... (e.g., 'Generate a campaign idea for eco-friendly water bottles')"></textarea>
+				<button id="sendMessage">Send Message</button>
+				<div id="response"></div>
+			</section>
+		</div>
+
+		<script>
+			// Get agent info
+			document.getElementById('getInfo').addEventListener('click', async () => {
+				try {
+					const response = await fetch('/agent/info');
+					const data = await response.json();
+					document.getElementById('agentInfo').textContent = JSON.stringify(data, null, 2);
+				} catch (error) {
+					document.getElementById('agentInfo').innerHTML = `<span class="error">Error: ${error.message}</span>`;
+				}
+			});
+
+			// Send message to agent
+			document.getElementById('sendMessage').addEventListener('click', async () => {
+				const messageInput = document.getElementById('messageInput');
+				const responseDiv = document.getElementById('response');
+				
+				try {
+					const response = await fetch('/agent/process', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json'
+						},
+						body: JSON.stringify({
+							message: messageInput.value
+						})
+					});
+					
+					const data = await response.json();
+					responseDiv.textContent = JSON.stringify(data, null, 2);
+				} catch (error) {
+					responseDiv.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+				}
+			});
+		</script>
+	</body>
+</html>
