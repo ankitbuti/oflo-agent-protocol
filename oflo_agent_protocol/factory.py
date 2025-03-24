@@ -1,10 +1,18 @@
-from typing import Type
+from typing import Type, List, Dict, Any, Union
+from agent import BaseAgent, AgentStatus, Message
+
+from services.weaviate import WeaviateService
+
+weaviate_service = WeaviateService(
+    url=os.getenv('WEAVIATE_URL'),
+    api_key=os.getenv('WEAVIATE_API_KEY')
+)
 
 class OfloAgentFactory:
     """Factory for creating agents based on a specified type."""
     
     @staticmethod
-    def create_agent(agent_type: str, **kwargs) -> Type[BaseOfloAgent]:
+    def create_agent(agent_type: str, **kwargs) -> Type[BaseAgent]:
         """Create an agent of the specified type."""
         if agent_type == "example_agent":
             return ExampleAgent(**kwargs)
@@ -13,14 +21,14 @@ class OfloAgentFactory:
         else:
             raise ValueError(f"Unknown agent type: {agent_type}")
 
-class ExampleAgent(BaseOfloAgent):
+class ExampleAgent(BaseAgent):
     """An example implementation of a BaseOfloAgent."""
     
     def __init__(self, id: str, name: str, capabilities: List[str]):
         self._id = id
         self._name = name
         self._capabilities = capabilities
-        self._status = OfloAgentStatus.INACTIVE
+        self._status = AgentStatus.INACTIVE
 
     @property
     def id(self) -> str:
@@ -31,7 +39,7 @@ class ExampleAgent(BaseOfloAgent):
         return self._name
 
     @property
-    def status(self) -> OfloAgentStatus:
+    def status(self) -> AgentStatus:
         return self._status
 
     @property
@@ -39,25 +47,25 @@ class ExampleAgent(BaseOfloAgent):
         return self._capabilities
 
     async def initialize(self, config: Dict[str, Any] = None) -> bool:
-        self._status = OfloAgentStatus.ACTIVE
+        self._status = AgentStatus.ACTIVE
         return True
 
-    async def process_message(self, message: Union[str, Dict, OfloMessage]) -> OfloMessage:
+    async def process_message(self, message: Union[str, Dict, Message]) -> Message:
         # Process the incoming message and return a response
-        return OfloMessage(role="assistant", content="Processed message")
+        return Message(role="assistant", content="Processed message")
 
     async def call_function(self, function_name: str, parameters: Dict[str, Any]) -> Any:
         # Call a specific function with the provided parameters
         return {"result": "Function called"}
 
-class AnotherAgent(BaseOfloAgent):
+class AnotherAgent(BaseAgent):
     """Another example implementation of a BaseOfloAgent."""
     
     def __init__(self, id: str, name: str, capabilities: List[str]):
         self._id = id
         self._name = name
         self._capabilities = capabilities
-        self._status = OfloAgentStatus.INACTIVE
+        self._status = AgentStatus.INACTIVE
 
     @property
     def id(self) -> str:
@@ -68,7 +76,7 @@ class AnotherAgent(BaseOfloAgent):
         return self._name
 
     @property
-    def status(self) -> OfloAgentStatus:
+    def status(self) -> AgentStatus:
         return self._status
 
     @property
@@ -76,12 +84,12 @@ class AnotherAgent(BaseOfloAgent):
         return self._capabilities
 
     async def initialize(self, config: Dict[str, Any] = None) -> bool:
-        self._status = OfloAgentStatus.ACTIVE
+        self._status = AgentStatus.ACTIVE
         return True
 
-    async def process_message(self, message: Union[str, Dict, OfloMessage]) -> OfloMessage:
+    async def process_message(self, message: Union[str, Dict, Message]) -> Message:
         # Process the incoming message and return a response
-        return OfloMessage(role="assistant", content="Another agent processed message")
+        return Message(role="assistant", content="Another agent processed message")
 
     async def call_function(self, function_name: str, parameters: Dict[str, Any]) -> Any:
         # Call a specific function with the provided parameters

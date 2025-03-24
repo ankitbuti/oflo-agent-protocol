@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from datetime import datetime
 import aiohttp
 from aiohttp import web
+from services.weaviate import WeaviateService
+from aimon import Detect
 
 
 class AgentStatus(Enum):
@@ -184,7 +186,7 @@ class BaseAgent(IAgentInterface):
     Compatible with OpenAI Function Calling API, Anthropic MCP, and Cloudflare Agent.
     """
 
-    def __init__(self, name: str = None, purpose: str = None, model_config: Dict = None):
+    def __init__(self, weaviate_service: WeaviateService, name: str = None, purpose: str = None, model_config: Dict = None, ):
         self._id = str(uuid.uuid4())
         self._name = name or f"Agent-{self._id[:8]}"
         self._status = AgentStatus.INITIALIZING
@@ -193,10 +195,23 @@ class BaseAgent(IAgentInterface):
         self._conversation_history = []
         self._model_config = model_config or {}
         self._logger = logging.getLogger(f"agent.{self._name}")
+        self.weaviate = weaviate_service
         
         # MCP specific attributes
         self._mcp_tools = []
         self._tool_handlers = {}
+        
+        # Setup AIMon detection with all guardrails
+        self.detect = Detect(
+            values_returned=['context', 'generated_text'],
+            config={
+                "hallucination": {"detector_name": "default"},
+                "completeness": {"enabled": True},
+                "conciseness": {"enabled": True},
+                "toxicity": {"enabled": True},
+                "instruction_adherence": {"enabled": True}
+            }
+        )
         
     @property
     def id(self) -> str:
@@ -270,72 +285,88 @@ class BaseAgent(IAgentInterface):
             
         return True
 
-    async def process_message(self, message: Union[str, Dict, Message]) -> Message:
-        """Process a message and return a response."""
-        # Convert the message to a Message object if it's not already
-        if isinstance(message, str):
-            msg = Message(role="user", content=message)
-        elif isinstance(message, dict):
-            msg = Message(
-                role=message.get("role", "user"),
-                content=message.get("content", ""),
-                function_call=message.get("function_call"),
-                tool_calls=message.get("tool_calls"),
-                tool_results=message.get("tool_results")
-            )
-        else:
-            msg = message
-            
-        # Add to conversation history
-        self._conversation_history.append(msg)
-        
-        # Check for tool calls and execute them if necessary
-        if msg.tool_calls:
-            tool_results = []
-            for tool_call in msg.tool_calls:
-                tool_id = tool_call.get("id")
-                tool_name = tool_call.get("function", {}).get("name")
-                tool_args = tool_call.get("function", {}).get("arguments", "{}")
-                
-                try:
-                    # Parse arguments
-                    args = json.loads(tool_args) if isinstance(tool_args, str) else tool_args
-                    
-                    # Call the tool
-                    result = await self.call_function(tool_name, args)
-                    
-                    # Add to results
-                    tool_results.append({
-                        "tool_call_id": tool_id,
-                        "role": "tool",
-                        "name": tool_name,
-                        "content": json.dumps(result) if not isinstance(result, str) else result
-                    })
-                except Exception as e:
-                    self._logger.error(f"Error executing tool {tool_name}: {str(e)}")
-                    tool_results.append({
-                        "tool_call_id": tool_id,
-                        "role": "tool",
-                        "name": tool_name,
-                        "content": json.dumps({"error": str(e)})
-                    })
-            
-            # Create a tool response message
-            if tool_results:
-                tool_response = Message(
-                    role="assistant",
-                    content="",
-                    tool_results=tool_results
+    @detect
+    async def process_message(self, message: Union[str, Dict, Message], context: str = "") -> Message:
+        """
+        Process a message with AIMon guardrails.
+        The @detect decorator will automatically check for:
+        - Hallucinations
+        - Completeness
+        - Conciseness
+        - Toxicity
+        - Instruction adherence
+        """
+        try:
+            # Convert the message to a Message object if it's not already
+            if isinstance(message, str):
+                msg = Message(role="user", content=message)
+            elif isinstance(message, dict):
+                msg = Message(
+                    role=message.get("role", "user"),
+                    content=message.get("content", ""),
+                    function_call=message.get("function_call"),
+                    tool_calls=message.get("tool_calls"),
+                    tool_results=message.get("tool_results")
                 )
-                self._conversation_history.append(tool_response)
-        
-        # Process the message (to be implemented by subclasses)
-        response = await self._generate_response(msg)
-        
-        # Add response to conversation history
-        self._conversation_history.append(response)
-        
-        return response
+            else:
+                msg = message
+            
+            # Add to conversation history
+            self._conversation_history.append(msg)
+            
+            # Check for tool calls and execute them if necessary
+            if msg.tool_calls:
+                tool_results = []
+                for tool_call in msg.tool_calls:
+                    tool_id = tool_call.get("id")
+                    tool_name = tool_call.get("function", {}).get("name")
+                    tool_args = tool_call.get("function", {}).get("arguments", "{}")
+                    
+                    try:
+                        # Parse arguments
+                        args = json.loads(tool_args) if isinstance(tool_args, str) else tool_args
+                        
+                        # Call the tool
+                        result = await self.call_function(tool_name, args)
+                        
+                        # Add to results
+                        tool_results.append({
+                            "tool_call_id": tool_id,
+                            "role": "tool",
+                            "name": tool_name,
+                            "content": json.dumps(result) if not isinstance(result, str) else result
+                        })
+                    except Exception as e:
+                        self._logger.error(f"Error executing tool {tool_name}: {str(e)}")
+                        tool_results.append({
+                            "tool_call_id": tool_id,
+                            "role": "tool",
+                            "name": tool_name,
+                            "content": json.dumps({"error": str(e)})
+                        })
+                
+                # Create a tool response message
+                if tool_results:
+                    tool_response = Message(
+                        role="assistant",
+                        content="",
+                        tool_results=tool_results
+                    )
+                    self._conversation_history.append(tool_response)
+            
+            # Process the message (to be implemented by subclasses)
+            response = await self._generate_response(msg)
+            
+            # Add response to conversation history
+            self._conversation_history.append(response)
+            
+            return context, response
+        except Exception as e:
+            self._logger.error(f"Error processing message: {e}")
+            return context, Message(
+                role="assistant",
+                content="I encountered an error processing your message."
+            )
 
     async def _generate_response(self, message: Message) -> Message:
         """Generate a response to the message."""
