@@ -302,7 +302,7 @@ class BaseAgentV2:
             token_usage=token_usage,
             latency_ms=latency_ms,
             cost_usd=token_usage.cost_usd(
-                ModelProvider(provider_name.split("/")[-1]) if "/" not in provider_name else ModelProvider.ANTHROPIC,
+                _safe_provider(provider_name),
                 model_id,
             ),
             success=error_msg is None,
@@ -410,6 +410,15 @@ class BaseAgentV2:
 
     def __repr__(self) -> str:
         return f"BaseAgentV2(name={self._name!r}, id={self._id[:8]}, status={self._status.value})"
+
+
+def _safe_provider(name: str) -> ModelProvider:
+    """Convert a provider_name string to ModelProvider, defaulting to ANTHROPIC."""
+    try:
+        part = name.split("/")[-1] if "/" in name else name
+        return ModelProvider(part)
+    except ValueError:
+        return ModelProvider.ANTHROPIC
 
 
 def _python_type_to_json(hint: Any) -> str:
