@@ -25,6 +25,7 @@ class ModelProvider(Enum):
     GOOGLE = "google"
     GROQ = "groq"
     OLLAMA = "ollama"
+    OPENROUTER = "openrouter"
     COHERE = "cohere"
 
 

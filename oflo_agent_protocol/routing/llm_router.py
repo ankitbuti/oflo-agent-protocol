@@ -36,7 +36,8 @@ def _available_providers() -> Set[ModelProvider]:
         available.add(ModelProvider.GROQ)
     if os.getenv("OLLAMA_HOST"):
         available.add(ModelProvider.OLLAMA)
-    # Always include OLLAMA as local fallback if binary present
+    if os.getenv("OPENROUTER_API_KEY"):
+        available.add(ModelProvider.OPENROUTER)
     return available or {ModelProvider.ANTHROPIC}  # at least try something
 
 

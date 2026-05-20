@@ -86,6 +86,20 @@ except ImportError:
     OpenAIRuntime = GroqRuntime = OllamaRuntime = None  # type: ignore
 
 try:
+    from oflo_agent_protocol.runtimes.openrouter_runtime import OpenRouterRuntime
+except ImportError:
+    OpenRouterRuntime = None  # type: ignore
+
+try:
+    from oflo_agent_protocol.runtimes.daytona_runtime import (
+        DaytonaSandbox,
+        DaytonaSandboxRuntime,
+        daytona_session,
+    )
+except ImportError:
+    DaytonaSandbox = DaytonaSandboxRuntime = daytona_session = None  # type: ignore
+
+try:
     from oflo_agent_protocol.runtimes.langgraph_runtime import (
         LangGraphOrchestrator,
         LangGraphRuntime,
@@ -116,6 +130,28 @@ from oflo_agent_protocol.audit.guardrails import GuardrailConfig, Guardrails
 
 # ── Memory ────────────────────────────────────────────────────────────────────
 from oflo_agent_protocol.memory.memory_manager import MemoryManager
+
+try:
+    from oflo_agent_protocol.memory.redis_memory import (
+        RedisMemoryManager,
+        SharedSessionMemory,
+    )
+except ImportError:
+    RedisMemoryManager = SharedSessionMemory = None  # type: ignore
+
+# ── Voice ─────────────────────────────────────────────────────────────────────
+try:
+    from oflo_agent_protocol.voice.voice_agent import VoiceAgent, VoiceSessionStats
+    from oflo_agent_protocol.voice.audio_interface import (
+        BufferedAudioInterface,
+        FileAudioInterface,
+        NullAudioInterface,
+        WebSocketAudioInterface,
+    )
+except ImportError:
+    VoiceAgent = VoiceSessionStats = None  # type: ignore
+    BufferedAudioInterface = FileAudioInterface = None  # type: ignore
+    NullAudioInterface = WebSocketAudioInterface = None  # type: ignore
 
 # ── Backward compat with v1 ───────────────────────────────────────────────────
 # Legacy imports still work: from oflo_agent_protocol import BaseAgent, Message
@@ -154,6 +190,10 @@ __all__ = [
     "OpenAIRuntime",
     "GroqRuntime",
     "OllamaRuntime",
+    "OpenRouterRuntime",
+    "DaytonaSandbox",
+    "DaytonaSandboxRuntime",
+    "daytona_session",
     "LangGraphRuntime",
     "LangGraphOrchestrator",
     # protocols
@@ -172,4 +212,13 @@ __all__ = [
     "Guardrails",
     # memory
     "MemoryManager",
+    "RedisMemoryManager",
+    "SharedSessionMemory",
+    # voice
+    "VoiceAgent",
+    "VoiceSessionStats",
+    "BufferedAudioInterface",
+    "FileAudioInterface",
+    "NullAudioInterface",
+    "WebSocketAudioInterface",
 ]

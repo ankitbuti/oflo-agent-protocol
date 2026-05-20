@@ -23,6 +23,13 @@ from oflo_agent_protocol.core.registry import AgentRegistry
 from oflo_agent_protocol.core.types import AgentStatus, ModelProvider, RoutingStrategy
 from oflo_agent_protocol.runtimes.base_runtime import BaseRuntime
 
+try:
+    from oflo_agent_protocol.memory.redis_memory import RedisMemoryManager
+    _HAS_REDIS = True
+except ImportError:
+    RedisMemoryManager = None  # type: ignore
+    _HAS_REDIS = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +62,9 @@ class AgentManager:
         token_budget: Optional[int] = None,
         audit_dir: Optional[str] = None,
         guardrail_config: Optional[GuardrailConfig] = None,
+        redis_memory: Optional[Any] = None,
+        redis_base_url: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> None:
         self.project_id = project_id
         self._strategy = strategy
@@ -66,6 +76,16 @@ class AgentManager:
         )
         self._guardrail_config = guardrail_config or GuardrailConfig()
         self._logger = logging.getLogger(f"manager.{project_id}")
+
+        # Optional shared Redis memory — one session per manager instance
+        self._redis: Optional[Any] = redis_memory
+        if self._redis is None and redis_base_url and _HAS_REDIS:
+            self._redis = RedisMemoryManager(
+                session_id=session_id or project_id,
+                project_id=project_id,
+                base_url=redis_base_url,
+            )
+        self._session_id: str = session_id or project_id
 
     # ------------------------------------------------------------------
     # Agent lifecycle
@@ -113,11 +133,38 @@ class AgentManager:
     # ------------------------------------------------------------------
 
     async def route_message(self, agent_name: str, message: str) -> str:
-        """Send a message to a named agent, return text reply."""
+        """Send a message to a named agent, return text reply.
+
+        If a Redis memory manager is configured, enriches the agent's working
+        memory with relevant context before routing and persists the exchange.
+        """
         agent = self._registry.get_by_name(agent_name)
         if agent is None:
             raise ValueError(f"No agent named '{agent_name}' in project '{self.project_id}'")
-        return await agent.chat(message)
+
+        if self._redis:
+            try:
+                enriched = await self._redis.enrich_system_prompt(agent.system_prompt, message)
+                if enriched != agent.system_prompt:
+                    agent._system_prompt = enriched
+                await self._redis.append_to_working_memory("user", message)
+            except Exception as exc:
+                self._logger.warning("Redis memory unavailable: %s", exc)
+
+        reply = await agent.chat(message)
+
+        if self._redis:
+            try:
+                await self._redis.append_to_working_memory("assistant", reply)
+                await self._redis.add_long_term(
+                    text=f"Q: {message}\nA: {reply}",
+                    agent_id=agent.id,
+                    memory_type="conversation",
+                )
+            except Exception as exc:
+                self._logger.warning("Redis memory write failed: %s", exc)
+
+        return reply
 
     async def route_to_capable(self, message: str, capability_hint: str = "") -> str:
         """Route to the first active agent (optionally filtered by capability)."""
@@ -218,5 +265,28 @@ class AgentManager:
     def on_cost_alert(self, callback: Any) -> None:
         self._telemetry.on_alert(callback)
 
+    # ------------------------------------------------------------------
+    # Shared memory helpers
+    # ------------------------------------------------------------------
+
+    async def memory_search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search long-term Redis memory for relevant past exchanges."""
+        if not self._redis:
+            return []
+        try:
+            return await self._redis.search(query, limit=limit)
+        except Exception as exc:
+            self._logger.warning("Memory search failed: %s", exc)
+            return []
+
+    async def clear_session_memory(self) -> None:
+        """Clear working memory for the current session."""
+        if self._redis:
+            try:
+                await self._redis.clear_working_memory()
+            except Exception:
+                pass
+
     def __repr__(self) -> str:
-        return f"AgentManager(project={self.project_id!r}, agents={len(self._registry)})"
+        redis_tag = " +redis" if self._redis else ""
+        return f"AgentManager(project={self.project_id!r}, agents={len(self._registry)}{redis_tag})"

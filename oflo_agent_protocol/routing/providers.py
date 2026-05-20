@@ -141,6 +141,46 @@ _MODELS: List[ModelConfig] = [
             json_mode=True, context_window=128_000
         ),
     ),
+    # ── OpenRouter (unified gateway — auto-routes across 300+ models) ──────
+    ModelConfig(
+        provider=ModelProvider.OPENROUTER,
+        model_id="openrouter/auto",
+        display_name="OpenRouter Auto",
+        input_cost_per_m=3.0,   # blended estimate — varies by routed model
+        output_cost_per_m=15.0,
+        avg_latency_ms=1500,
+        priority=2,
+        capabilities=ModelCapabilities(
+            vision=True, long_context=True, function_calling=True,
+            streaming=True, json_mode=True, context_window=200_000
+        ),
+    ),
+    ModelConfig(
+        provider=ModelProvider.OPENROUTER,
+        model_id="anthropic/claude-sonnet-4-6",
+        display_name="Claude Sonnet 4.6 (via OpenRouter)",
+        input_cost_per_m=3.0,
+        output_cost_per_m=15.0,
+        avg_latency_ms=1300,
+        priority=1,
+        capabilities=ModelCapabilities(
+            vision=True, long_context=True, function_calling=True,
+            streaming=True, json_mode=True, context_window=200_000
+        ),
+    ),
+    ModelConfig(
+        provider=ModelProvider.OPENROUTER,
+        model_id="meta-llama/llama-3.3-70b-instruct",
+        display_name="Llama 3.3 70B (via OpenRouter)",
+        input_cost_per_m=0.12,
+        output_cost_per_m=0.30,
+        avg_latency_ms=500,
+        priority=1,
+        capabilities=ModelCapabilities(
+            function_calling=True, streaming=True,
+            json_mode=True, context_window=128_000
+        ),
+    ),
 ]
 
 

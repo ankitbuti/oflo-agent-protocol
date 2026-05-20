@@ -355,8 +355,6 @@ class BaseAgentV2:
             return self._runtime
         # Auto-select via SmartRouter
         from oflo_agent_protocol.routing.llm_router import RoutingRequest, SmartRouter
-        from oflo_agent_protocol.runtimes.claude_runtime import ClaudeRuntime
-        from oflo_agent_protocol.runtimes.openai_runtime import OpenAIRuntime
 
         router = SmartRouter()
         decision = router.route(RoutingRequest(strategy=self._strategy))
@@ -364,11 +362,22 @@ class BaseAgentV2:
         model_id = decision.model_id
 
         if provider == ModelProvider.ANTHROPIC:
+            from oflo_agent_protocol.runtimes.claude_runtime import ClaudeRuntime
             self._runtime = ClaudeRuntime(model_id=model_id)
-        elif provider in (ModelProvider.OPENAI, ModelProvider.GROQ):
+        elif provider == ModelProvider.OPENAI:
+            from oflo_agent_protocol.runtimes.openai_runtime import OpenAIRuntime
+            self._runtime = OpenAIRuntime(model_id=model_id)
+        elif provider == ModelProvider.GROQ:
             from oflo_agent_protocol.runtimes.openai_runtime import GroqRuntime
-            self._runtime = GroqRuntime(model_id=model_id) if provider == ModelProvider.GROQ else OpenAIRuntime(model_id=model_id)
+            self._runtime = GroqRuntime(model_id=model_id)
+        elif provider == ModelProvider.OPENROUTER:
+            from oflo_agent_protocol.runtimes.openrouter_runtime import OpenRouterRuntime
+            self._runtime = OpenRouterRuntime(model_id=model_id)
+        elif provider == ModelProvider.OLLAMA:
+            from oflo_agent_protocol.runtimes.openai_runtime import OllamaRuntime
+            self._runtime = OllamaRuntime(model_id=model_id)
         else:
+            from oflo_agent_protocol.runtimes.claude_runtime import ClaudeRuntime
             self._runtime = ClaudeRuntime()  # final fallback
 
         self._logger.info("Auto-selected runtime: %s/%s", provider.value, model_id)

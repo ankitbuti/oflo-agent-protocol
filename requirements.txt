@@ -22,6 +22,22 @@ langchain-google-genai>=1.0.0  # optional
 langchain-groq>=0.1.0           # optional
 langgraph>=0.1.0
 
+# ── OpenRouter (uses openai SDK — no extra install needed) ────────────────────
+# OpenRouter is accessed via openai>=1.30.0 with a custom base_url
+
+# ── ElevenLabs voice AI ───────────────────────────────────────────────────────
+elevenlabs>=1.0.0          # core SDK (TTS + Conversational AI)
+pyaudio>=0.2.14            # microphone/speaker I/O for DefaultAudioInterface
+                           # on macOS: brew install portaudio && pip install pyaudio
+
+# ── Daytona sandbox runtime ───────────────────────────────────────────────────
+daytona>=0.1.0             # agent sandboxing (pip install daytona)
+
+# ── Redis Agent Memory Server ─────────────────────────────────────────────────
+# Uses aiohttp (already listed above) — no extra SDK needed.
+# Run the server: docker run -p 8000:8000 redis/agent-memory-server
+# Or: pip install agent-memory-server && agent-memory-server
+
 # ── Vector memory (optional — Weaviate v4 client) ─────────────────────────────
 weaviate-client>=4.5.0     # optional — remove if not using Weaviate
 
