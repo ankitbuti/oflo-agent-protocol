@@ -1,12 +1,13 @@
 """
 v2 Integrations Demo
 ====================
-Demonstrates all four Part-2 integrations working together:
+Demonstrates all five Part-2 integrations working together:
 
   1. OpenRouter  — multi-model fallback routing
   2. ElevenLabs  — voice AI session via NullAudioInterface (CI-safe)
   3. Daytona     — sandboxed code execution (requires DAYTONA_API_KEY)
   4. Redis Memory — shared session memory across agents
+  5. Composio    — 300+ app connectors (GitHub, Gmail, Slack, Notion, …)
 
 Run:
     python examples/v2_integrations_demo.py
@@ -18,6 +19,7 @@ Required env vars (set what you have; each section degrades gracefully):
     ELEVENLABS_AGENT_ID    — ElevenLabs conversational agent ID
     DAYTONA_API_KEY        — for sandbox demo
     REDIS_MEMORY_URL       — e.g. http://localhost:8000 (defaults to that)
+    COMPOSIO_API_KEY       — for Composio connector demo
 """
 from __future__ import annotations
 
@@ -320,18 +322,132 @@ async def demo_agent_manager_with_redis() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 6. Composio — 300+ app connectors
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def demo_composio() -> None:
+    print("\n" + "=" * 60)
+    print("6. COMPOSIO — 300+ App Connectors")
+    print("=" * 60)
+
+    api_key = os.getenv("COMPOSIO_API_KEY")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        print("  [skip] COMPOSIO_API_KEY not set")
+        print("         Get one free at: https://dashboard.composio.dev/settings")
+        return
+
+    try:
+        from oflo_agent_protocol.connectors import ComposioConnector, ComposioToolKit
+        from oflo_agent_protocol.core.agent import BaseAgentV2
+
+        connector = ComposioConnector(api_key=api_key, user_id="demo-user")
+        print(f"  Connector: {connector.describe()}")
+
+        # ── List available actions ────────────────────────────────────
+        print("\n  Discovering actions in 'hackernews' toolkit (no auth needed)...")
+        actions = await connector.list_actions(toolkits=["hackernews"], limit=5)
+        for a in actions:
+            print(f"    • {a['slug']}: {a['description'][:60]}")
+
+        # ── Inject tools into an agent ────────────────────────────────
+        if anthropic_key:
+            from oflo_agent_protocol.runtimes.claude_runtime import ClaudeRuntime
+
+            agent = BaseAgentV2(
+                name="ResearchAgent",
+                system_prompt=(
+                    "You are a research assistant with access to HackerNews. "
+                    "Use available tools to answer questions."
+                ),
+                runtime=ClaudeRuntime(model_id="claude-haiku-4-5-20251001"),
+            )
+
+            n = await connector.inject_into_agent(
+                agent,
+                toolkits=["hackernews"],
+            )
+            print(f"\n  Injected {n} HackerNews tool(s) into ResearchAgent")
+            print(f"  Available tools: {list(agent._tools.keys())[:5]}")
+
+            # Execute via LLM tool-calling
+            reply = await agent.chat(
+                "Use your tools to get info about the HackerNews user 'pg'."
+            )
+            print(f"\n  Agent reply:\n  {reply[:300]}")
+
+        # ── Direct action execution (no LLM) ─────────────────────────
+        print("\n  Executing HACKERNEWS_GET_USER directly (no LLM)...")
+        try:
+            result = await connector.execute_action(
+                "HACKERNEWS_GET_USER",
+                {"username": "pg"},
+            )
+            print(f"  Result: {str(result)[:200]}")
+        except Exception as exc:
+            print(f"  Action exec: {exc}")
+
+        # ── AgentManager with Composio wired in ───────────────────────
+        print("\n  AgentManager with auto-injected Composio tools...")
+        from oflo_agent_protocol.managers.agent_manager import AgentManager
+
+        mgr = AgentManager(
+            project_id="composio-demo",
+            composio_api_key=api_key,
+            composio_user_id="demo-user",
+        )
+        print(f"  {mgr!r}")
+
+        # Create agent with Composio toolkits pre-injected
+        if anthropic_key:
+            from oflo_agent_protocol.runtimes.claude_runtime import ClaudeRuntime as CR
+
+            research_agent = mgr.create_agent(
+                "HNResearcher",
+                system_prompt="You research HackerNews stories.",
+                runtime=CR(model_id="claude-haiku-4-5-20251001"),
+                composio_toolkits=["hackernews"],
+            )
+            print(f"  HNResearcher has {len(research_agent._tools)} tool(s) from Composio")
+
+        # ── OAuth connect flow ────────────────────────────────────────
+        print("\n  Simulating GitHub OAuth connect flow...")
+        try:
+            url = await connector.connect_app(
+                "github",
+                callback_url="https://your-app.com/oauth/callback",
+            )
+            print(f"  Authorize URL: {url[:80]}{'...' if len(str(url)) > 80 else ''}")
+        except Exception as exc:
+            print(f"  Connect flow: {exc}")
+
+        # ── List connected apps ───────────────────────────────────────
+        connected = await connector.list_connected_apps()
+        print(f"\n  Connected apps for 'demo-user': {len(connected)} found")
+        for app in connected[:3]:
+            print(f"    • {app.get('app', '?')} — {app.get('status', '?')}")
+
+    except ImportError as exc:
+        print(f"  [skip] Composio not installed: {exc}")
+        print("         pip install composio")
+    except Exception as exc:
+        print(f"  [error] {exc}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def main() -> None:
     print("Oflo Agent Protocol v2 — Integration Demo")
-    print("Showing: OpenRouter · ElevenLabs Voice · Daytona Sandbox · Redis Memory")
+    print("Showing: OpenRouter · ElevenLabs Voice · Daytona Sandbox · Redis Memory · Composio")
 
     await demo_openrouter()
     await demo_voice()
     await demo_daytona()
     await demo_redis_memory()
     await demo_agent_manager_with_redis()
+    await demo_composio()
 
     print("\n" + "=" * 60)
     print("Demo complete.")

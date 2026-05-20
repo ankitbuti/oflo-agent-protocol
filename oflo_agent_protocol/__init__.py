@@ -139,6 +139,15 @@ try:
 except ImportError:
     RedisMemoryManager = SharedSessionMemory = None  # type: ignore
 
+# ── Connectors (Composio + future integrations) ───────────────────────────────
+try:
+    from oflo_agent_protocol.connectors.composio_connector import (
+        ComposioConnector,
+        ComposioToolKit,
+    )
+except ImportError:
+    ComposioConnector = ComposioToolKit = None  # type: ignore
+
 # ── Voice ─────────────────────────────────────────────────────────────────────
 try:
     from oflo_agent_protocol.voice.voice_agent import VoiceAgent, VoiceSessionStats
@@ -214,6 +223,9 @@ __all__ = [
     "MemoryManager",
     "RedisMemoryManager",
     "SharedSessionMemory",
+    # connectors
+    "ComposioConnector",
+    "ComposioToolKit",
     # voice
     "VoiceAgent",
     "VoiceSessionStats",

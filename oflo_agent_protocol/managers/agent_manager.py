@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any, Dict, List, Optional, Type
 
 from oflo_agent_protocol.audit.audit_logger import AuditLogger
@@ -29,6 +30,13 @@ try:
 except ImportError:
     RedisMemoryManager = None  # type: ignore
     _HAS_REDIS = False
+
+try:
+    from oflo_agent_protocol.connectors.composio_connector import ComposioConnector
+    _HAS_COMPOSIO = True
+except ImportError:
+    ComposioConnector = None  # type: ignore
+    _HAS_COMPOSIO = False
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +73,9 @@ class AgentManager:
         redis_memory: Optional[Any] = None,
         redis_base_url: Optional[str] = None,
         session_id: Optional[str] = None,
+        composio_connector: Optional[Any] = None,
+        composio_api_key: Optional[str] = None,
+        composio_user_id: Optional[str] = None,
     ) -> None:
         self.project_id = project_id
         self._strategy = strategy
@@ -87,6 +98,15 @@ class AgentManager:
             )
         self._session_id: str = session_id or project_id
 
+        # Optional Composio connector — wires 300+ app tools into agents
+        self._composio: Optional[Any] = composio_connector
+        if self._composio is None and (composio_api_key or os.getenv("COMPOSIO_API_KEY")) and _HAS_COMPOSIO:
+            import os as _os
+            self._composio = ComposioConnector(
+                api_key=composio_api_key or _os.getenv("COMPOSIO_API_KEY"),
+                user_id=composio_user_id or project_id,
+            )
+
     # ------------------------------------------------------------------
     # Agent lifecycle
     # ------------------------------------------------------------------
@@ -99,9 +119,16 @@ class AgentManager:
         strategy: Optional[RoutingStrategy] = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        composio_toolkits: Optional[List[str]] = None,
+        composio_actions: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> BaseAgentV2:
-        """Create, register, and return a new agent."""
+        """Create, register, and return a new agent.
+
+        If *composio_toolkits* or *composio_actions* are provided (and a
+        ComposioConnector is configured on this manager), the corresponding
+        Composio tools are injected into the agent automatically.
+        """
         agent = BaseAgentV2(
             name=name,
             system_prompt=system_prompt,
@@ -117,6 +144,22 @@ class AgentManager:
         asyncio.get_event_loop().run_until_complete(self._registry.register(agent))
         agent._status = AgentStatus.ACTIVE
         self._logger.info("Created agent '%s' (%s)", name, agent.id[:8])
+
+        if (composio_toolkits or composio_actions) and self._composio:
+            try:
+                n = asyncio.get_event_loop().run_until_complete(
+                    self._composio.inject_into_agent(
+                        agent,
+                        toolkits=composio_toolkits,
+                        actions=composio_actions,
+                    )
+                )
+                self._logger.info(
+                    "Injected %d Composio tool(s) into agent '%s'", n, name
+                )
+            except Exception as exc:
+                self._logger.warning("Composio tool injection failed: %s", exc)
+
         return agent
 
     async def register_agent(self, agent: BaseAgentV2) -> None:
@@ -287,6 +330,60 @@ class AgentManager:
             except Exception:
                 pass
 
+    # ------------------------------------------------------------------
+    # Composio helpers
+    # ------------------------------------------------------------------
+
+    async def inject_composio_tools(
+        self,
+        agent_name: str,
+        toolkits: Optional[List[str]] = None,
+        actions: Optional[List[str]] = None,
+        search: Optional[str] = None,
+    ) -> int:
+        """Inject Composio tools into an already-created agent by name."""
+        if not self._composio:
+            raise RuntimeError(
+                "No ComposioConnector configured. Pass composio_api_key= to AgentManager."
+            )
+        agent = self._registry.get_by_name(agent_name)
+        if agent is None:
+            raise ValueError(f"Agent '{agent_name}' not found")
+        return await self._composio.inject_into_agent(
+            agent, toolkits=toolkits, actions=actions, search=search
+        )
+
+    async def connect_composio_app(
+        self,
+        app_name: str,
+        callback_url: Optional[str] = None,
+    ) -> str:
+        """Initiate an OAuth / API-key flow for a Composio app."""
+        if not self._composio:
+            raise RuntimeError("No ComposioConnector configured.")
+        return await self._composio.connect_app(app_name, callback_url=callback_url)
+
+    async def list_composio_apps(self) -> List[Dict[str, Any]]:
+        """List all connected Composio apps for this project's user."""
+        if not self._composio:
+            return []
+        return await self._composio.list_connected_apps()
+
+    async def execute_composio_action(
+        self,
+        action_slug: str,
+        params: Dict[str, Any],
+    ) -> Any:
+        """Execute a Composio action directly (bypasses the LLM)."""
+        if not self._composio:
+            raise RuntimeError("No ComposioConnector configured.")
+        return await self._composio.execute_action(action_slug, params)
+
     def __repr__(self) -> str:
-        redis_tag = " +redis" if self._redis else ""
-        return f"AgentManager(project={self.project_id!r}, agents={len(self._registry)}{redis_tag})"
+        tags = []
+        if self._redis:
+            tags.append("+redis")
+        if self._composio:
+            tags.append("+composio")
+        suffix = " " + " ".join(tags) if tags else ""
+        return f"AgentManager(project={self.project_id!r}, agents={len(self._registry)}{suffix})"

@@ -22,6 +22,11 @@ langchain-google-genai>=1.0.0  # optional
 langchain-groq>=0.1.0           # optional
 langgraph>=0.1.0
 
+# ── Composio — 300+ app connectors (GitHub, Gmail, Slack, Notion, Jira, …) ───
+composio>=0.7.0            # new session-based SDK (preferred)
+# composio-openai>=0.5.0   # legacy OpenAI-flavour toolset (fallback — optional)
+# composio-langchain>=0.5.0 # legacy LangChain-flavour toolset (fallback — optional)
+
 # ── OpenRouter (uses openai SDK — no extra install needed) ────────────────────
 # OpenRouter is accessed via openai>=1.30.0 with a custom base_url
 
